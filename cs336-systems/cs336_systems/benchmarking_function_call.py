@@ -122,7 +122,7 @@ def profile_xl(args):
         d_ff=args.d_ff,
     ).to(device)
     optimizer = AdamW(xl_model.parameters())
-    inputs = torch.randint(low=args.vocab_size, high=args.vocab_size-1,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
+    inputs = torch.randint(low=0, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
     def run_step():
         with record_function("forward_pass"):
             out = xl_model(inputs)
