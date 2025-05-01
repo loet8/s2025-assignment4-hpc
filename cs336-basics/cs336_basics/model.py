@@ -172,7 +172,8 @@ class BasicsTransformerLM(nn.Module):
             # (batch size, sequence_length, d_model)
             x = layer(x)
         # (batch size, sequence_length, d_model)
-        x = self.ln_final(x)
+        with record_function("rmsnorm_final"):
+            x = self.ln_final(x)
         # (batch size, sequence_length, vocab_size)
         logits = self.lm_head(x)
         return logits
@@ -311,16 +312,24 @@ class TransformerBlock(nn.Module):
         # NOTE: this is a pre-norm Transformer, and differs from the original
         # description in the paper.
         # Apply the multi-head self-attention sublayer
-        x_attn = self.attn(self.ln1(x))
+        with record_function("rmsnorm1"):
+            x_norm1 = self.ln1(x)
+        with record_function("self_attn"):
+            x_attn = self.attn(x_norm1)
+            
         if self.residual_pdrop is not None:
             x_attn = F.dropout(x_attn, self.residual_pdrop)
         attn_sublayer_output = x + x_attn
 
         # Apply the feed-forward sublayer
-        x_ffn = self.ffn(self.ln2(attn_sublayer_output))
+        with record_function("rmsnorm2"):
+            x_norm2 = self.ln2(attn_sublayer_output)
+        with record_function("ffn"):
+            ff = self.ffn(x_norm2)
         if self.residual_pdrop is not None:
-            x_ffn = F.dropout(x_ffn, self.residual_pdrop)
-        ffn_sublayer_output = attn_sublayer_output + x_ffn
+            ff = F.dropout(ff, self.residual_pdrop)
+        ffn_sublayer_output = attn_sublayer_output + ff
+        
         return ffn_sublayer_output
 
 
