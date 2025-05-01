@@ -163,13 +163,6 @@ def profile_xl(args):
     create_flame_graph(stacks_file, svg_file)
     print(f"Flame graph written to {svg_file}")
 
-def main():
-    args = parse_args()
-    profile_xl(args)
-
-if __name__ == "__main__":
-    main()
-  
 
 
 def main():
