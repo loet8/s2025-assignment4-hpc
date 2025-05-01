@@ -132,12 +132,13 @@ def profile_xl(args):
     def run_step():
         with record_function("forward_pass"):
             out = xl_model(inputs)
-        with record_function("backward_pass"):
-            loss = out.sum()
-            loss.backward()
-        with record_function("optimizer"):
-            optimizer.step()
-            optimizer.zero_grad(set_to_none=True)
+        if not args.forward_only:
+            with record_function("backward_pass"):
+                loss = out.sum()
+                loss.backward()
+            with record_function("optimizer"):
+                optimizer.step()
+                optimizer.zero_grad(set_to_none=True)
   
     for _ in range(args.warmup_steps):
         run_step()
