@@ -51,7 +51,7 @@ def forward_blocks(x: torch.Tensor, model: Transformer, args) -> torch.Tensor:
     x = model.token_embeddings(x) + model.position_embeddings(pos)
     for block in model.layers:
         if args.gradient_checkpointing:
-            x = checkpoint(block, x)
+            x = checkpoint(block, x, use_reentrant=False)
         else:
             x = block(x)
     x = model.ln_final(x)
