@@ -34,7 +34,7 @@ def make_run(args) -> Callable:
     # Define a model 
     model = Transformer(
         vocab_size=args.vocab_size,
-        context_length = arg.seq_len
+        context_length = arg.seq_len,
         d_model=args.d_model,
         num_layers=args.num_layers,
         num_heads=args.num_heads,
