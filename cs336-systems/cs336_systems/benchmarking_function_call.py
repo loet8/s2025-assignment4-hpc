@@ -125,7 +125,7 @@ def profile_xl(args):
   inputs = torch.randint(low=args.vocab_size, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
   def run_step():
         with record_function("forward_pass"):
-            out = model(inputs)
+            out = xl_model(inputs)
         with record_function("backward_pass"):
             loss = out.sum()
             loss.backward()
