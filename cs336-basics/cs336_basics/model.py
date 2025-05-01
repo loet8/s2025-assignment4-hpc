@@ -10,6 +10,8 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+from torch.profiler import record_function
+
 
 from .nn_utils import softmax
 
