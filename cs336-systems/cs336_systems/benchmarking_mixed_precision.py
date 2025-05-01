@@ -8,6 +8,8 @@ from torch.cuda.amp    import autocast
 from cs336_basics.model import BasicsTransformerLM as Transformer
 import argparse, timeit, torch, statistics
 from typing import Callable, List
+from torch.utils.checkpoint import checkpoint  
+
 
 def parse_args():
     p = argparse.ArgumentParser(description="End-to-end benchmarking of Transformer")
@@ -24,6 +26,7 @@ def parse_args():
     p.add_argument("--backward_only", action="store_true")
     p.add_argument("--profile", action="store_true")
     p.add_argument("--mixed_precision", action="store_true")
+    p.add_argument("--gradient_checkpointing", action="store_true")
 
     return p.parse_args()
 
@@ -63,14 +66,18 @@ def make_run(args) -> Callable:
     if args.forward_only:
         def run_fwd():
             with amp_ctx:
-                _ = model(inputs)
+                if args.gradient_checkpointing:
+                    _ = checkpoint(model, inputs)
+                else:
+                    _ = model(inputs)
         return run_fwd
 
-    #backward-only
     if args.backward_only:
-        # build the graph once
         with amp_ctx:
-            out  = model(inputs)
+            if args.gradient_checkpointing:
+                out = checkpoint(model, inputs)
+            else:
+                out = model(inputs)
             loss = out.sum()
         def run_bwd():
             with amp_ctx:
@@ -80,7 +87,10 @@ def make_run(args) -> Callable:
 
     def run_fb():
         with amp_ctx:
-            out  = model(inputs)
+            if args.gradient_checkpointing:
+                out = checkpoint(model, inputs)
+            else:
+                out = model(inputs)
             loss = out.sum()
             loss.backward()
         model.zero_grad(set_to_none=True)
@@ -134,7 +144,10 @@ def profile_xl(args):
     def run_step():
         with record_function("forward_pass"):
             with amp_ctx:
-                out = xl_model(inputs)
+                if args.gradient_checkpointing:
+                    out = checkpoint(xl_model, inputs)
+                else:
+                    out = xl_model(inputs)
         if not args.forward_only:
             with record_function("backward_pass"):
                 with amp_ctx:
@@ -151,7 +164,7 @@ def profile_xl(args):
     
     stacks_file = "xl_profiler_stacks.txt"
     svg_file    = "xl-flame-graph.svg"
-    
+
     with profile(
         activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
         experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True),
