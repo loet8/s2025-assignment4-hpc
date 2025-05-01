@@ -66,7 +66,7 @@ def make_run(args) -> Callable:
         model.zero_grad(set_to_none=True)
     return run_fb
   
-  def mean(x: List[float]) -> float:
+def mean(x: List[float]) -> float:
     return sum(x) / len(x)
 
 def round1(x: float) -> float:
