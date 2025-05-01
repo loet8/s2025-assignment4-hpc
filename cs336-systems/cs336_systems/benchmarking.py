@@ -34,11 +34,11 @@ def make_run(args) -> Callable:
     # Define a model 
     model = Transformer(
         vocab_size=args.vocab_size,
+        context_length = arg.seq_len
         d_model=args.d_model,
-        n_heads=args.num_heads,
-        d_ff=args.d_ff,
         num_layers=args.num_layers,
-        max_seq_len=args.seq_len
+        num_heads=args.num_heads,
+        d_ff=args.d_ff,
     ).to(device)
     model.train()
 
