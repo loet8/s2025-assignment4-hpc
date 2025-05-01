@@ -133,12 +133,12 @@ def profile_xl(args):
             optimizer.step()
             optimizer.zero_grad(set_to_none=True)
 
-    for _ in range(args.warmup_steps):
+   for _ in range(args.warmup_steps):
         run_step()
         if torch.cuda.is_available():
             torch.cuda.synchronize()
-
-    with profile(
+    
+   with profile(
         activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
         experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True),
         record_shapes=True, profile_memory=False, with_stack=True
@@ -146,7 +146,7 @@ def profile_xl(args):
         for _ in range(args.measure_steps):
             run_step()
             prof.step()
-
+    
     prof.export_stacks("xl_profiler_stacks.txt", "self_cuda_time_total")
     print(prof.key_averages().table(
         sort_by="cuda_time_total", row_limit=50
