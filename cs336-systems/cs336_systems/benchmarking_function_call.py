@@ -24,7 +24,13 @@ def parse_args():
 
     return p.parse_args()
 
-
+def create_flame_graph(in_path: str, out_path: str):
+    if not os.path.exists("FlameGraph"):
+        os.system("git clone https://github.com/brendangregg/FlameGraph")
+    os.system(
+        f"FlameGraph/flamegraph.pl "
+        f"--title \"CUDA time\" --countname \"us\" {in_path} > {out_path}"
+    )
 
 def get_device(index: int = 0) -> torch.device:
     """Try to use the GPU if possible, otherwise, use CPU."""
@@ -138,6 +144,8 @@ def profile_xl(args):
         if torch.cuda.is_available():
             torch.cuda.synchronize()
     
+    stacks_file = "xl_profiler_stacks.txt"
+    svg_file    = "xl-flame-graph.svg"
     with profile(
         activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
         experimental_config=torch._C._profiler._ExperimentalConfig(verbose=True),
@@ -146,11 +154,20 @@ def profile_xl(args):
         for _ in range(args.measure_steps):
             run_step()
             prof.step()
-    
-    prof.export_stacks("xl_profiler_stacks.txt", "self_cuda_time_total")
-    print(prof.key_averages().table(
-        sort_by="cuda_time_total", row_limit=50
-    ))
+            if device.type=="cuda": torch.cuda.synchronize()
+
+    print(prof.key_averages().table(sort_by="cuda_time_total", row_limit=30))
+    prof.export_stacks(stacks_file, "self_cuda_time_total")
+
+    create_flame_graph(stacks_file, svg_file)
+    print(f"Flame graph written to {svg_file}")
+
+def main():
+    args = parse_args()
+    profile_xl(args)
+
+if __name__ == "__main__":
+    main()
   
 
 
