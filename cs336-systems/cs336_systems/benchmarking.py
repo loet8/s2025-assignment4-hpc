@@ -42,14 +42,29 @@ def make_run(args) -> Callable:
     # Define an input (random)
     inputs = torch.randint(low=0, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
 
-    def run():
-        # Run the model `num_steps` times (note: no optimizer updates)
-        out = model(inputs)
-        if not args.forward_only:
-            loss = out.sum()
-            loss.backward()
+    #forward-only
+    if args.forward_only:
+        def run_fwd():
+            _ = model(inputs)
+        return run_fwd
+
+    #backward-only
+    if args.backward_only:
+        # build the graph once
+        out  = model(inputs)
+        loss = out.sum()
+        def run_bwd():
+            loss.backward(retain_graph=True)
             model.zero_grad(set_to_none=True)
-    return run
+        return run_bwd
+
+    #forward+backward
+    def run_fb():
+        out = model(inputs)
+        loss = out.sum()
+        loss.backward()
+        model.zero_grad(set_to_none=True)
+    return run_fb
   
   def mean(x: List[float]) -> float:
     return sum(x) / len(x)
@@ -59,6 +74,9 @@ def round1(x: float) -> float:
     return round(x, 1)
 
 def benchmark(description: str, run: Callable, num_warmups, num_trials):
+    """Benchmark `func` by running it `num_trials`, and return all the times."""
+    # Warmup: first times might be slower due to compilation, things not cached.
+    # Since we will run the kernel multiple times, the timing that matters is steady state.
     for _ in range(num_warmups):
         run()
     if torch.cuda.is_available():
@@ -77,7 +95,7 @@ def benchmark(description: str, run: Callable, num_warmups, num_trials):
 
     mean_time = mean(times)
     print(f"{description}: {list(map(round1, sorted(times)))} (mean {round1(mean_time)} ms)")
-    
+
     mean_time_stats = statistics.mean(times)
     std_time  = statistics.stdev(times) if len(times)>1 else 0.0
 
@@ -88,7 +106,13 @@ def benchmark(description: str, run: Callable, num_warmups, num_trials):
 def main():
     args = parse_args()
     runner = make_run(args)
-    desc   = "FWD" if args.forward_only else "FWD+BWD"
+    if args.forward_only:
+        desc = "FWD only"
+    elif args.backward_only:
+        desc = "BWD only"
+    else:
+        desc = "FWD+BWD"
+
     benchmark(desc, runner, args.warmup_steps, args.measure_steps)
   
 
