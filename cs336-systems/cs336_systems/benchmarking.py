@@ -13,7 +13,8 @@ def parse_args():
     p.add_argument("--batch_size", type=int,   default=16,   help="Batch size")
     p.add_argument("--warmup_steps",   "-w", type=int, default=1, help="Number of warm-up iterations")
     p.add_argument("--measure_steps", "-n", type=int, default=5, help="Number of measured iterations")
-    p.add_argument("--forward_only",    action="store_true", help="Only time the forward pass")
+    p.add_argument("--forward_only",  action="store_true")
+    p.add_argument("--backward_only", action="store_true")
     return p.parse_args()
 
 
