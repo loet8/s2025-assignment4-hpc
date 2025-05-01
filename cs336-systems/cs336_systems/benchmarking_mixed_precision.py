@@ -9,6 +9,7 @@ from cs336_basics.model import BasicsTransformerLM as Transformer
 import argparse, timeit, torch, statistics
 from typing import Callable, List
 from torch.utils.checkpoint import checkpoint  
+from functools import partial
 
 
 def parse_args():
@@ -44,10 +45,20 @@ def get_device(index: int = 0) -> torch.device:
         return torch.device(f"cuda:{index}")
     else:
         return torch.device("cpu")
+    
+def forward_blocks(x: torch.Tensor, model: Transformer, args) -> torch.Tensor:
+    pos = torch.arange(x.size(1), device=x.device).unsqueeze(0)
+    x = model.token_embeddings(x) + model.position_embeddings(pos)
+    for block in model.layers:
+        if args.gradient_checkpointing:
+            x = checkpoint(block, x)
+        else:
+            x = block(x)
+    x = model.ln_final(x)
+    return model.lm_head(x)
 
 def make_run(args) -> Callable:
     device = get_device()
-    # Define a model 
     model = Transformer(
         vocab_size=args.vocab_size,
         context_length = args.seq_len,
@@ -58,26 +69,18 @@ def make_run(args) -> Callable:
     ).to(device)
     model.train()
 
-    # Define an input (random)
     inputs = torch.randint(low=0, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
     amp_ctx = autocast() if args.mixed_precision else nullcontext()
 
-    #forward-only
     if args.forward_only:
         def run_fwd():
             with amp_ctx:
-                if args.gradient_checkpointing:
-                    _ = checkpoint(model, inputs)
-                else:
-                    _ = model(inputs)
+                _ = forward_blocks(inputs, model, args)
         return run_fwd
 
     if args.backward_only:
         with amp_ctx:
-            if args.gradient_checkpointing:
-                out = checkpoint(model, inputs)
-            else:
-                out = model(inputs)
+            out  = forward_blocks(inputs, model, args)
             loss = out.sum()
         def run_bwd():
             with amp_ctx:
@@ -87,10 +90,7 @@ def make_run(args) -> Callable:
 
     def run_fb():
         with amp_ctx:
-            if args.gradient_checkpointing:
-                out = checkpoint(model, inputs)
-            else:
-                out = model(inputs)
+            out  = forward_blocks(inputs, model, args)
             loss = out.sum()
             loss.backward()
         model.zero_grad(set_to_none=True)
@@ -144,19 +144,14 @@ def profile_xl(args):
     def run_step():
         with record_function("forward_pass"):
             with amp_ctx:
-                if args.gradient_checkpointing:
-                    out = checkpoint(xl_model, inputs)
-                else:
-                    out = xl_model(inputs)
+                out = forward_blocks(inputs, xl_model, args)
         if not args.forward_only:
             with record_function("backward_pass"):
                 with amp_ctx:
-                    loss = out.sum()
-                    loss.backward()
+                    loss = out.sum(); loss.backward()
             with record_function("optimizer"):
-                optimizer.step()
-                optimizer.zero_grad(set_to_none=True)
-  
+                optimizer.step(); optimizer.zero_grad(set_to_none=True)
+
     for _ in range(args.warmup_steps):
         run_step()
         if torch.cuda.is_available():
