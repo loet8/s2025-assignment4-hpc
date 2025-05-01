@@ -112,8 +112,8 @@ def benchmark(description: str, run: Callable, num_warmups, num_trials):
 
 
 def profile_xl(args):
-   device = get_device()
-   xl_model = Transformer(
+    device = get_device()
+    xl_model = Transformer(
         vocab_size=args.vocab_size,
         context_length = args.seq_len,
         d_model=args.d_model,
@@ -121,9 +121,9 @@ def profile_xl(args):
         num_heads=args.num_heads,
         d_ff=args.d_ff,
     ).to(device)
-   optimizer = AdamW(xl_model.parameters())
-   inputs = torch.randint(low=args.vocab_size, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
-   def run_step():
+    optimizer = AdamW(xl_model.parameters())
+    inputs = torch.randint(low=args.vocab_size, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
+    def run_step():
         with record_function("forward_pass"):
             out = xl_model(inputs)
         with record_function("backward_pass"):
@@ -147,8 +147,8 @@ def profile_xl(args):
             run_step()
             prof.step()
     
-     prof.export_stacks("xl_profiler_stacks.txt", "self_cuda_time_total")
-     print(prof.key_averages().table(
+    prof.export_stacks("xl_profiler_stacks.txt", "self_cuda_time_total")
+    print(prof.key_averages().table(
         sort_by="cuda_time_total", row_limit=50
     ))
   
