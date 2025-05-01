@@ -1,4 +1,4 @@
-import sys
+import sys, os
 sys.path.insert(0, "/content/s2025-assignment4-hpc/cs336-basics")
 
 from torch.profiler import profile, record_function, ProfilerActivity
