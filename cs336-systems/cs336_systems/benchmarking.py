@@ -1,3 +1,6 @@
+import sys
+sys.path.insert(0, "/content/s2025-assignment4-hpc/cs336-basics")
+
 from cs336_basics.model import Transformer
 import argparse, timeit, torch, statistics
 from typing import Callable, List
