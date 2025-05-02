@@ -136,6 +136,7 @@ def profile_xl(args):
         num_layers=args.num_layers,
         num_heads=args.num_heads,
         d_ff=args.d_ff,
+        norm_type=args.norm_type,
     ).to(device)
     optimizer = AdamW(xl_model.parameters())
     inputs = torch.randint(low=0, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
