@@ -42,7 +42,8 @@ def get_rmsnorm_autograd_function_pytorch() -> Type:
     
     return MyRMSNormAutogradFunctionClass
     raise NotImplementedError
-
+    
+@triton.jit
 def _rmsnorm_bwd_fused_kernel(
     X_ptr, W_ptr, GY_ptr, DX_ptr, PDG_ptr,
     stride_xm, stride_xn, stride_wn,
