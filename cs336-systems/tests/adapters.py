@@ -43,6 +43,32 @@ def get_rmsnorm_autograd_function_pytorch() -> Type:
     return MyRMSNormAutogradFunctionClass
     raise NotImplementedError
 
+def _rmsnorm_bwd_fused_kernel(
+    X_ptr, W_ptr, GY_ptr, DX_ptr, PDG_ptr,
+    stride_xm, stride_xn, stride_wn,
+    stride_pgm, stride_pgn,
+    M, N, eps, BLOCK: tl.constexpr
+):
+    row = tl.program_id(0)
+    col = tl.arange(0, BLOCK)
+    mask = col < N
+
+    x  = tl.load(X_ptr  + row*stride_xm + col*stride_xn, mask=mask)
+    w  = tl.load(W_ptr  +        col*stride_wn,   mask=mask)
+    gy = tl.load(GY_ptr + row*stride_xm + col*stride_xn, mask=mask)
+
+    sumsq   = tl.sum(x * x, axis=0)
+    inv_rms = 1.0 / tl.sqrt(sumsq / N + eps)
+    inv_rms3 = inv_rms ** 3
+
+    dot = tl.sum(w * gy * x, axis=0)
+
+    dx = w * gy * inv_rms \
+         - (x * (inv_rms3 / N)) * dot
+    tl.store(DX_ptr + row*stride_xm + col*stride_xn, dx, mask=mask)
+
+    pdg = gy * x * inv_rms
+    tl.store(PDG_ptr + row*stride_pgm + col*stride_pgn, pdg, mask=mask)
 
 def get_rmsnorm_autograd_function_triton() -> Type:
     """
@@ -91,6 +117,8 @@ def get_rmsnorm_autograd_function_triton() -> Type:
 
             ctx.save_for_backward(x, weight)
             ctx.H = H
+            ctx.eps = eps
+
 
             stride_xm = H
             stride_xn = 1
@@ -108,7 +136,36 @@ def get_rmsnorm_autograd_function_triton() -> Type:
 
         @staticmethod
         def backward(ctx, grad_output):
-            raise NotImplementedError("backward not yet implemented")
+            x, weight = ctx.saved_tensors
+            H    = ctx.H
+            eps  = ctx.eps
+            orig_shape = grad_output.shape
+
+            M = grad_output.numel() // H
+            x_flat  = x.contiguous().view(M, H)
+            gy_flat = grad_output.contiguous().view(M, H)
+
+            dx_flat  = torch.empty_like(x_flat)
+            pdg_flat = torch.empty_like(x_flat)   
+
+            stride_xm, stride_xn = H, 1
+            stride_wn = weight.stride(0)
+            stride_pgm, stride_pgn = H, 1
+
+            grid = (M,)
+            _rmsnorm_bwd_fused_kernel[grid](
+                x_flat, weight, gy_flat,
+                dx_flat, pdg_flat,
+                stride_xm, stride_xn, stride_wn,
+                stride_pgm, stride_pgn,
+                M, H, eps,
+                BLOCK=1024, num_warps=4
+            )
+
+            dx = dx_flat.view(orig_shape)
+            dg = pdg_flat.sum(dim=0)
+
+            return dx, dg, None
 
     return RMSNormTriton
     raise NotImplementedError
