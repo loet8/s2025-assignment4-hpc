@@ -6,9 +6,11 @@ from torch.optim import AdamW
 from contextlib import nullcontext
 from torch.cuda.amp    import autocast
 from cs336_basics.model import BasicsTransformerLM as Transformer
+from cs336_basics.model import RMSNorm
 import argparse, timeit, torch, statistics
 from typing import Callable, List
 from torch.utils.checkpoint import checkpoint  
+from torch.nn import LayerNorm
 from functools import partial
 
 
@@ -28,6 +30,7 @@ def parse_args():
     p.add_argument("--profile", action="store_true")
     p.add_argument("--mixed_precision", action="store_true")
     p.add_argument("--gradient_checkpointing", action="store_true")
+    p.add_argument("--norm_benchmark", action="store_true")
 
     return p.parse_args()
 
@@ -51,7 +54,7 @@ def forward_blocks(x: torch.Tensor, model: Transformer, args) -> torch.Tensor:
     x = model.token_embeddings(x) + model.position_embeddings(pos)
     for block in model.layers:
         if args.gradient_checkpointing:
-            x = checkpoint(block, x, use_reentrant=False)
+            x = checkpoint(block, x)
         else:
             x = block(x)
     x = model.ln_final(x)
@@ -124,9 +127,6 @@ def benchmark(description: str, run: Callable, num_warmups, num_trials):
     s = statistics.stdev(times) if len(times)>1 else 0.0
     print(f"{description} over {num_trials} steps: {m:.1f}±{s:.1f} ms per step")
 
-
-
-
 def profile_xl(args):
     device = get_device()
     xl_model = Transformer(
@@ -176,7 +176,43 @@ def profile_xl(args):
     create_flame_graph(stacks_file, svg_file)
     print(f"Flame graph written to {svg_file}")
 
+def benchmark_norms():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    N_ROWS = 50_000
+    DIMS   = [1024, 2048, 4096, 8192]
+    N_ITERS = 1000
 
+    results: List[tuple] = []
+    for dim in DIMS:
+        x = torch.randn(N_ROWS, dim, device=device, dtype=torch.float32)
+
+        rms = RMSNorm(hidden_size=dim).to(device)
+        ln  = LayerNorm(dim).to(device).eval()
+
+        for _ in range(10):
+            _ = rms(x); _ = ln(x)
+        torch.cuda.synchronize()
+
+        def run_rms():
+            _ = rms(x)
+            torch.cuda.synchronize()
+
+        t_rms = timeit.repeat(run_rms, repeat=3, number=N_ITERS)
+        ms_rms = statistics.mean(t_rms)/N_ITERS*1000
+
+        def run_ln():
+            _ = ln(x)
+            torch.cuda.synchronize()
+
+        t_ln = timeit.repeat(run_ln, repeat=3, number=N_ITERS)
+        ms_ln = statistics.mean(t_ln)/N_ITERS*1000
+
+        results.append((dim, ms_rms, ms_ln))
+
+    print("| hidden_dim | RMSNorm (ms) | LayerNorm (ms) |")
+    print("|-----------:|-------------:|---------------:|")
+    for dim, r, l in results:
+        print(f"| {dim:10d} | {r:12.3f} | {l:14.3f} |")
 
 def main():
     args = parse_args()
@@ -191,6 +227,10 @@ def main():
         desc = "BWD only"
     else:
         desc = "FWD+BWD"
+
+    if args.norm_benchmark:
+        benchmark_norms()
+        return
 
     benchmark(desc, runner, args.warmup_steps, args.measure_steps)
   
