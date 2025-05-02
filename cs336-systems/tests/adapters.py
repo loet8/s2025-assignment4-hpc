@@ -81,7 +81,7 @@ def get_rmsnorm_autograd_function_triton() -> Type:
         # write back
         tl.store(Out_ptr + row * stride_xm + col * stride_xn, y, mask=mask)
     
-    class RMSNormTritonFunction(torch.autograd.Function):
+    class MyTritonRMSNormAutogradFunctionClass(torch.autograd.Function):
         @staticmethod
         def forward(ctx, x, weight, eps=1e-5):
             # x: (M, N), weight: (N,)
