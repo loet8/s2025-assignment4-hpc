@@ -60,7 +60,7 @@ def _rmsnorm_bwd_fused_kernel(
 
     sumsq   = tl.sum(x * x, axis=0)
     inv_rms = 1.0 / tl.sqrt(sumsq / N + eps)
-    inv_rms3 = inv_rms ** 3
+    inv_rms3 = inv_rms * inv_rms * inv_rms
 
     dot = tl.sum(w * gy * x, axis=0)
 
