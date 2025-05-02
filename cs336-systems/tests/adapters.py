@@ -50,62 +50,62 @@ def get_rmsnorm_autograd_function_triton() -> Type:
     """
     @triton.jit
     def _rmsnorm_fwd_kernel(
-        X_ptr,            # pointer to X
-        W_ptr,            # pointer to weight
-        Out_ptr,          # pointer to output
-        stride_xm,        # X.stride(-2)
-        stride_xn,        # X.stride(-1)
-        stride_wn,        # W.stride(0)
-        M,                # number of rows
-        N,                # hidden size
-        eps,              # small constant
-        BLOCK: tl.constexpr  # tile size
+        X_ptr, W_ptr, Out_ptr,
+        stride_xm, stride_xn, stride_wn,
+        M, N, eps,
+        BLOCK: tl.constexpr
     ):
         row = tl.program_id(0)
         col = tl.arange(0, BLOCK)
         mask = col < N
-    
-        # pointers into X and W
+
         x_ptrs = X_ptr + row * stride_xm + col * stride_xn
         w_ptrs = W_ptr + col * stride_wn
-    
+
         x = tl.load(x_ptrs, mask=mask, other=0.0)
         w = tl.load(w_ptrs, mask=mask, other=0.0)
-    
-        # compute sum of squares
+
         sumsq = tl.sum(x * x, axis=0, mask=mask)
-        # reciprocal sqrt
         inv_rms = 1.0 / tl.sqrt(sumsq / N + eps)
         y = x * inv_rms * w
-    
-        # write back
+
         tl.store(Out_ptr + row * stride_xm + col * stride_xn, y, mask=mask)
-    
-    class MyTritonRMSNormAutogradFunctionClass(torch.autograd.Function):
+
+    class RMSNormTriton(Function):
         @staticmethod
-        def forward(ctx, x, weight, eps=1e-5):
-            # x: (M, N), weight: (N,)
-            M, N = x.shape
-            out = torch.empty_like(x)
-            # save for backward if you implement it later
+        def forward(ctx, x: Tensor, weight: Tensor, eps: float = 1e-5) -> Tensor:
+            orig_shape = x.shape
+            H = orig_shape[-1]
+            M = x.numel() // H
+
+            # flatten to (M, H)
+            x_flat = x.contiguous().view(M, H)
+            out_flat = torch.empty_like(x_flat)
+
+            # save for backward
             ctx.save_for_backward(x, weight)
-            ctx.N = N
-            # launch one program per row
+            ctx.H = H
+
+            # strides in the flat view
+            stride_xm = H
+            stride_xn = 1
+            stride_wn = weight.stride(0)
+
             grid = (M,)
             _rmsnorm_fwd_kernel[grid](
-                x, weight, out,
-                x.stride(-2), x.stride(-1), weight.stride(0),
-                M, N, eps,
-                BLOCK=1024,  # choose a tile size >= max N
-                num_warps=4
+                x_flat, weight, out_flat,
+                stride_xm, stride_xn, stride_wn,
+                M, H, eps,
+                BLOCK=1024, num_warps=4
             )
-            return out
-    
+
+            return out_flat.view(orig_shape)
+
         @staticmethod
-        def backward(ctx, grad_out):
+        def backward(ctx, grad_output):
             raise NotImplementedError("backward not yet implemented")
 
-    return MyTritonRMSNormAutogradFunctionClass
+    return RMSNormTriton
     raise NotImplementedError
 
 
