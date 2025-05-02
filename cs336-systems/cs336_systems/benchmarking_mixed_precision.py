@@ -196,7 +196,7 @@ def benchmark_norms():
         def run_rms():
             _ = rms(x)
         
-         if torch.cuda.is_available():
+        if torch.cuda.is_available():
             torch.cuda.synchronize()
 
         t_rms = timeit.repeat(run_rms, repeat=3, number=N_ITERS)
