@@ -24,10 +24,18 @@ def get_rmsnorm_autograd_function_pytorch() -> Type:
             mu2 = x.pow(2).mean(dim=-1, keepdim=True)
             inv_rms = torch.rsqrt(mu2 + eps)       
             out = x * inv_rms * weight
+            ctx.save_for_backward(x, weight)
+            ctx.eps = eps
             return out
 
         @staticmethod
         def backward(ctx, grad_output):
+            x, g = ctx.saved_tensors
+            eps = ctx.eps
+            dg = rmsnorm_backward_g_pytorch(grad_output, x, g)
+            dx = rmsnorm_backward_x_pytorch(grad_output, x, g)
+            return dx, dg
+
             raise NotImplementedError("RMSNormForwardOnly only implements the forward pass")
 
     
@@ -158,10 +166,10 @@ def rmsnorm_backward_x_pytorch(
     H = x.shape[-1]
     eps = 1e-5
 
-    mu2 = x.pow(2).mean(dim=-1, keepdim=True)         # (...,1)
-    r   = (mu2 + eps).rsqrt()                         # (...,1)
+    mu2 = x.pow(2).mean(dim=-1, keepdim=True)         
+    r   = (mu2 + eps).rsqrt()                         
 
-    inner = (g * grad_output * x).sum(dim=-1, keepdim=True)  # (...,1)
+    inner = (g * grad_output * x).sum(dim=-1, keepdim=True)  
 
     dx = g * grad_output * r \
        - (x * (r**3 / H)) * inner
