@@ -31,6 +31,7 @@ def parse_args():
     p.add_argument("--mixed_precision", action="store_true")
     p.add_argument("--gradient_checkpointing", action="store_true")
     p.add_argument("--norm_benchmark", action="store_true")
+    p.add_argument("--norm_type", choices=["rms","layer"])
 
     return p.parse_args()
 
