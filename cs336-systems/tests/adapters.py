@@ -65,7 +65,7 @@ def get_rmsnorm_autograd_function_triton() -> Type:
         x = tl.load(x_ptrs, mask=mask, other=0.0)
         w = tl.load(w_ptrs, mask=mask, other=0.0)
 
-        sumsq = tl.sum(x * x, axis=0, mask=mask)
+        sumsq = tl.sum(x * x, axis=0)
         inv_rms = 1.0 / tl.sqrt(sumsq / N + eps)
         y = x * inv_rms * w
 
