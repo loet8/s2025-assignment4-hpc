@@ -4,6 +4,8 @@ from typing import Type
 import torch
 from torch.autograd import Function
 from torch import Tensor
+import triton
+import triton.language as tl
 
 
 def get_rmsnorm_autograd_function_pytorch() -> Type:
@@ -18,13 +20,9 @@ def get_rmsnorm_autograd_function_pytorch() -> Type:
     class MyRMSNormAutogradFunctionClass(Function):
         @staticmethod
         def forward(ctx, x: Tensor, weight: Tensor) -> Tensor:
-            # x: (..., H), weight: (H,)
             eps = 1e-5
-            # compute RMS over last dim
-            # mean of x^2:
             mu2 = x.pow(2).mean(dim=-1, keepdim=True)
-            inv_rms = torch.rsqrt(mu2 + eps)        # 1 / sqrt(mean(x^2) + eps)
-            # scale x and then apply weight
+            inv_rms = torch.rsqrt(mu2 + eps)       
             out = x * inv_rms * weight
             return out
 
@@ -50,7 +48,50 @@ def get_rmsnorm_autograd_function_triton() -> Type:
     Returns:
         A class object (not an instance of the class)
     """
-    # For example: return MyTritonRMSNormAutogradFunctionClass
+    @triton.jit
+    def _rmsnorm_fwd_kernel(
+        x_ptr,           
+        w_ptr,           
+        x_row_stride,    
+        y_ptr,           
+        H,               
+        eps,             
+        BLOCK: tl.constexpr 
+    ):
+        row_idx = tl.program_id(0)
+        offsets = tl.arange(0, BLOCK)
+        x_off = row_idx * x_row_stride + offsets
+        mask = offsets < H
+        x = tl.load(x_ptr + x_off, mask=mask, other=0.0)
+        w = tl.load(w_ptr + offsets, mask=mask, other=0.0)
+        mu2 = tl.sum(x * x, axis=0) / H
+        inv_rms = tl.rsqrt(mu2 + eps)
+        y = x * inv_rms * w
+        tl.store(y_ptr + x_off, y, mask=mask)
+
+    class MyTritonRMSNormAutogradFunctionClass(Function):
+        @staticmethod
+        def forward(ctx, x: Tensor, weight: Tensor) -> Tensor:
+            # x: (..., H), weight: (H,)
+            assert x.is_cuda and weight.is_cuda, "CUDA only"
+            H = x.shape[-1]
+            eps = 1e-5
+            x_contig = x.contiguous().view(-1, H)
+            y = torch.empty_like(x_contig)
+            n_rows = x_contig.shape[0]
+            BLOCK = triton.next_power_of_2(H)
+            _rmsnorm_fwd_kernel[(n_rows,)](
+                x_contig, weight, x_contig.stride(0), y,
+                H, eps, BLOCK,
+                num_warps=4
+            )
+            return y.view_as(x)
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            raise NotImplementedError("forward-only stub")
+
+    return MyTritonRMSNormAutogradFunctionClass
     raise NotImplementedError
 
 
