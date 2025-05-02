@@ -182,41 +182,31 @@ def benchmark_norms():
     DIMS   = [1024, 2048, 4096, 8192]
     N_ITERS = 1000
 
-    results: List[tuple] = []
+    print("| hidden_dim | RMSNorm (ms) | LayerNorm (ms) |")
+    print("|-----------:|-------------:|---------------:|")
+
     for dim in DIMS:
         x = torch.randn(N_ROWS, dim, device=device, dtype=torch.float32)
 
-        rms = RMSNorm(hidden_size=dim).to(device)
+        rms = RMSNorm(hidden_size=dim).to(device).eval()
         ln  = LayerNorm(dim).to(device).eval()
 
         for _ in range(10):
             _ = rms(x); _ = ln(x)
-        torch.cuda.synchronize()
-
-        def run_rms():
-            _ = rms(x)
-        
-        if torch.cuda.is_available():
+        if device.type == "cuda":
             torch.cuda.synchronize()
 
-        t_rms = timeit.repeat(run_rms, repeat=3, number=N_ITERS)
-        ms_rms = statistics.mean(t_rms)/N_ITERS*1000
-
-        def run_ln():
-            _ = ln(x)
-        
-        if torch.cuda.is_available():
+        t_rms = timeit.repeat(lambda: rms(x), repeat=3, number=N_ITERS)
+        if device.type == "cuda":
             torch.cuda.synchronize()
+        ms_rms = statistics.mean(t_rms) / N_ITERS * 1000
 
-        t_ln = timeit.repeat(run_ln, repeat=3, number=N_ITERS)
-        ms_ln = statistics.mean(t_ln)/N_ITERS*1000
+        t_ln = timeit.repeat(lambda: ln(x), repeat=3, number=N_ITERS)
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+        ms_ln = statistics.mean(t_ln) / N_ITERS * 1000
 
-        results.append((dim, ms_rms, ms_ln))
-
-    print("| hidden_dim | RMSNorm (ms) | LayerNorm (ms) |")
-    print("|-----------:|-------------:|---------------:|")
-    for dim, r, l in results:
-        print(f"| {dim:10d} | {r:12.3f} | {l:14.3f} |")
+        print(f"| {dim:10d} | {ms_rms:12.3f} | {ms_ln:14.3f} |")
 
 def main():
     args = parse_args()
