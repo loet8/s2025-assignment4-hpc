@@ -78,15 +78,12 @@ def get_rmsnorm_autograd_function_triton() -> Type:
             H = orig_shape[-1]
             M = x.numel() // H
 
-            # flatten to (M, H)
             x_flat = x.contiguous().view(M, H)
             out_flat = torch.empty_like(x_flat)
 
-            # save for backward
             ctx.save_for_backward(x, weight)
             ctx.H = H
 
-            # strides in the flat view
             stride_xm = H
             stride_xn = 1
             stride_wn = weight.stride(0)
@@ -128,16 +125,13 @@ def rmsnorm_backward_g_pytorch(
         Gradient of the loss with respect to g. Shape: (H,)
     """
     eps = 1e-5
-    # 1) compute 1/sqrt(mean(x^2,dim=-1)+eps)
-    m2 = x.pow(2).mean(dim=-1, keepdim=True)           # (...,1)
-    inv_rms = torch.rsqrt(m2 + eps)                    # (...,1)
+    m2 = x.pow(2).mean(dim=-1, keepdim=True)           
+    inv_rms = torch.rsqrt(m2 + eps)                    
 
-    # 2) elementwise contribution to ∂L/∂g_i is (∂L/∂y_i) * x_i * inv_rms
-    contrib = grad_output * x * inv_rms                 # (...,H)
+    contrib = grad_output * x * inv_rms                 
 
-    # 3) sum over all but the last dim to get shape (H,)
     reduce_dims = tuple(range(x.ndim - 1))
-    grad_g = contrib.sum(dim=reduce_dims)               # (H,)
+    grad_g = contrib.sum(dim=reduce_dims)               
 
     return grad_g
     raise NotImplementedError
@@ -161,6 +155,19 @@ def rmsnorm_backward_x_pytorch(
     Returns:
         Gradient of the loss with respect to x. Shape: (*, H)
     """
+    H = x.shape[-1]
+    eps = 1e-5
+
+    mu2 = x.pow(2).mean(dim=-1, keepdim=True)         # (...,1)
+    r   = (mu2 + eps).rsqrt()                         # (...,1)
+
+    inner = (g * grad_output * x).sum(dim=-1, keepdim=True)  # (...,1)
+
+    dx = g * grad_output * r \
+       - (x * (r**3 / H)) * inner
+
+    return dx
+
     raise NotImplementedError
 
 
