@@ -127,6 +127,19 @@ def rmsnorm_backward_g_pytorch(
     Returns:
         Gradient of the loss with respect to g. Shape: (H,)
     """
+    eps = 1e-5
+    # 1) compute 1/sqrt(mean(x^2,dim=-1)+eps)
+    m2 = x.pow(2).mean(dim=-1, keepdim=True)           # (...,1)
+    inv_rms = torch.rsqrt(m2 + eps)                    # (...,1)
+
+    # 2) elementwise contribution to ∂L/∂g_i is (∂L/∂y_i) * x_i * inv_rms
+    contrib = grad_output * x * inv_rms                 # (...,H)
+
+    # 3) sum over all but the last dim to get shape (H,)
+    reduce_dims = tuple(range(x.ndim - 1))
+    grad_g = contrib.sum(dim=reduce_dims)               # (H,)
+
+    return grad_g
     raise NotImplementedError
 
 
