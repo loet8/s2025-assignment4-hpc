@@ -10,8 +10,6 @@ from typing import Optional
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.profiler import record_function
-
 
 from .nn_utils import softmax
 
@@ -96,6 +94,7 @@ class BasicsTransformerLM(nn.Module):
         d_ff: int,
         attn_pdrop: Optional[float] = None,
         residual_pdrop: Optional[float] = None,
+        norm_type: str = "rms",
     ):
         # Store the model configuration for serialization / deserialization
         self.config = {
@@ -116,20 +115,19 @@ class BasicsTransformerLM(nn.Module):
                     d_ff=d_ff,
                     attn_pdrop=attn_pdrop,
                     residual_pdrop=residual_pdrop,
+                    norm_type=norm_type,
                 )
                 for _ in range(num_layers)
             ]
         )
-        self.ln_final = RMSNorm(d_model)
+        if norm_type == "rms":
+            self.ln_final = RMSNorm(d_model)
+        else:
+            self.ln_final = nn.LayerNorm(d_model)
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
-        # Tie the weights, since the paper mentions that "we share the same weight
-        # matrix between the two embedding layers and the pre-softmax linear transformation"
         self.lm_head.weight = self.token_embeddings.weight
         self.residual_pdrop = residual_pdrop
-        # report number of parameters
-        logger.info(
-            "number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,)
-        )
+        logger.info("number of non-embedding parameters: %.2fM" % (self.get_num_params() / 1e6,))
 
     def get_num_params(self, non_embedding=True):
         """
@@ -174,8 +172,7 @@ class BasicsTransformerLM(nn.Module):
             # (batch size, sequence_length, d_model)
             x = layer(x)
         # (batch size, sequence_length, d_model)
-        with record_function("rmsnorm_final"):
-            x = self.ln_final(x)
+        x = self.ln_final(x)
         # (batch size, sequence_length, vocab_size)
         logits = self.lm_head(x)
         return logits
@@ -290,6 +287,7 @@ class TransformerBlock(nn.Module):
         d_ff: int,
         attn_pdrop: Optional[float] = None,
         residual_pdrop: Optional[float] = None,
+        norm_type: str = "rms",
     ):
         super().__init__()
         self.attn = CausalMultiHeadSelfAttention(
@@ -297,9 +295,13 @@ class TransformerBlock(nn.Module):
             num_heads=num_heads,
             attn_pdrop=attn_pdrop,
         )
-        self.ln1 = RMSNorm(d_model)
-        self.ffn = FFN(d_model=d_model, d_ff=d_ff)
-        self.ln2 = RMSNorm(d_model)
+        if norm_type == "rms":
+            self.ln1 = RMSNorm(d_model)
+            self.ln2 = RMSNorm(d_model)
+        else:
+            self.ln1 = nn.LayerNorm(d_model)
+            self.ln2 = nn.LayerNorm(d_model)
+        self.ffn = FFN(d_model, d_ff)
         self.residual_pdrop = residual_pdrop
 
     def forward(self, x: torch.Tensor):
@@ -314,24 +316,16 @@ class TransformerBlock(nn.Module):
         # NOTE: this is a pre-norm Transformer, and differs from the original
         # description in the paper.
         # Apply the multi-head self-attention sublayer
-        with record_function("rmsnorm1"):
-            x_norm1 = self.ln1(x)
-        with record_function("self_attn"):
-            x_attn = self.attn(x_norm1)
-            
+        x_attn = self.attn(self.ln1(x))
         if self.residual_pdrop is not None:
             x_attn = F.dropout(x_attn, self.residual_pdrop)
         attn_sublayer_output = x + x_attn
 
         # Apply the feed-forward sublayer
-        with record_function("rmsnorm2"):
-            x_norm2 = self.ln2(attn_sublayer_output)
-        with record_function("ffn"):
-            ff = self.ffn(x_norm2)
+        x_ffn = self.ffn(self.ln2(attn_sublayer_output))
         if self.residual_pdrop is not None:
-            ff = F.dropout(ff, self.residual_pdrop)
-        ffn_sublayer_output = attn_sublayer_output + ff
-        
+            x_ffn = F.dropout(x_ffn, self.residual_pdrop)
+        ffn_sublayer_output = attn_sublayer_output + x_ffn
         return ffn_sublayer_output
 
 
@@ -482,7 +476,6 @@ class CausalMultiHeadSelfAttention(nn.Module):
         V = V.view(batch_size, sequence_length, self.num_heads, self.d_k).transpose(
             1, 2
         )
-        # TODO(nfliu): check if register_buffer is faster?
         causal_mask = torch.triu(
             torch.ones(sequence_length, sequence_length, device=x.device), diagonal=1
         ).bool()
