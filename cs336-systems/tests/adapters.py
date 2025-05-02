@@ -15,7 +15,26 @@ def get_rmsnorm_autograd_function_pytorch() -> Type:
     Returns:
         A class object (not an instance of the class)
     """
-    # For example: return MyRMSNormAutogradFunctionClass
+    class MyRMSNormAutogradFunctionClass(Function):
+        @staticmethod
+        def forward(ctx, x: Tensor, weight: Tensor) -> Tensor:
+            # x: (..., H), weight: (H,)
+            eps = 1e-5
+            # compute RMS over last dim
+            # mean of x^2:
+            mu2 = x.pow(2).mean(dim=-1, keepdim=True)
+            inv_rms = torch.rsqrt(mu2 + eps)        # 1 / sqrt(mean(x^2) + eps)
+            # scale x and then apply weight
+            out = x * inv_rms * weight
+            return out
+
+        @staticmethod
+        def backward(ctx, grad_output):
+            raise NotImplementedError("RMSNormForwardOnly only implements the forward pass")
+
+    
+    
+    return MyRMSNormAutogradFunctionClass
     raise NotImplementedError
 
 
