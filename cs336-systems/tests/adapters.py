@@ -50,46 +50,60 @@ def get_rmsnorm_autograd_function_triton() -> Type:
     """
     @triton.jit
     def _rmsnorm_fwd_kernel(
-        x_ptr,           
-        w_ptr,           
-        x_row_stride,    
-        y_ptr,           
-        H,               
-        eps,             
-        BLOCK: tl.constexpr 
+        X_ptr,            # pointer to X
+        W_ptr,            # pointer to weight
+        Out_ptr,          # pointer to output
+        stride_xm,        # X.stride(-2)
+        stride_xn,        # X.stride(-1)
+        stride_wn,        # W.stride(0)
+        M,                # number of rows
+        N,                # hidden size
+        eps,              # small constant
+        BLOCK: tl.constexpr  # tile size
     ):
-        row_idx = tl.program_id(0)
-        offsets = tl.arange(0, BLOCK)
-        x_off = row_idx * x_row_stride + offsets
-        mask = offsets < H
-        x = tl.load(x_ptr + x_off, mask=mask, other=0.0)
-        w = tl.load(w_ptr + offsets, mask=mask, other=0.0)
-        mu2 = tl.sum(x * x, axis=0) / H
-        inv_rms = tl.rsqrt(mu2 + eps)
+        row = tl.program_id(0)
+        col = tl.arange(0, BLOCK)
+        mask = col < N
+    
+        # pointers into X and W
+        x_ptrs = X_ptr + row * stride_xm + col * stride_xn
+        w_ptrs = W_ptr + col * stride_wn
+    
+        x = tl.load(x_ptrs, mask=mask, other=0.0)
+        w = tl.load(w_ptrs, mask=mask, other=0.0)
+    
+        # compute sum of squares
+        sumsq = tl.sum(x * x, axis=0, mask=mask)
+        # reciprocal sqrt
+        inv_rms = 1.0 / tl.sqrt(sumsq / N + eps)
         y = x * inv_rms * w
-        tl.store(y_ptr + x_off, y, mask=mask)
-
-    class MyTritonRMSNormAutogradFunctionClass(Function):
+    
+        # write back
+        tl.store(Out_ptr + row * stride_xm + col * stride_xn, y, mask=mask)
+    
+    class RMSNormTritonFunction(torch.autograd.Function):
         @staticmethod
-        def forward(ctx, x: Tensor, weight: Tensor) -> Tensor:
-            # x: (..., H), weight: (H,)
-            assert x.is_cuda and weight.is_cuda, "CUDA only"
-            H = x.shape[-1]
-            eps = 1e-5
-            x_contig = x.contiguous().view(-1, H)
-            y = torch.empty_like(x_contig)
-            n_rows = x_contig.shape[0]
-            BLOCK = triton.next_power_of_2(H)
-            _rmsnorm_fwd_kernel[(n_rows,)](
-                x_contig, weight, x_contig.stride(0), y,
-                H, eps, BLOCK,
+        def forward(ctx, x, weight, eps=1e-5):
+            # x: (M, N), weight: (N,)
+            M, N = x.shape
+            out = torch.empty_like(x)
+            # save for backward if you implement it later
+            ctx.save_for_backward(x, weight)
+            ctx.N = N
+            # launch one program per row
+            grid = (M,)
+            _rmsnorm_fwd_kernel[grid](
+                x, weight, out,
+                x.stride(-2), x.stride(-1), weight.stride(0),
+                M, N, eps,
+                BLOCK=1024,  # choose a tile size >= max N
                 num_warps=4
             )
-            return y.view_as(x)
-
+            return out
+    
         @staticmethod
-        def backward(ctx, grad_output):
-            raise NotImplementedError("forward-only stub")
+        def backward(ctx, grad_out):
+            raise NotImplementedError("backward not yet implemented")
 
     return MyTritonRMSNormAutogradFunctionClass
     raise NotImplementedError
