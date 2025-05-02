@@ -69,6 +69,7 @@ def make_run(args) -> Callable:
         num_layers=args.num_layers,
         num_heads=args.num_heads,
         d_ff=args.d_ff,
+        norm_type=args.norm_type,
     ).to(device)
     model.train()
 
