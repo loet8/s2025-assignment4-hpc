@@ -251,7 +251,7 @@ def benchmark_norms_fb():
     DIMS   = [1024, 2048, 4096, 8192]
     N_ITERS = 1000
 
-    print("| hidden_dim | RMSNorm-FB (ms) | -FB (ms) | TritonRMS-FB (ms) | LayerNorm-FB (ms) |")
+    print("| hidden_dim | RMSNorm-FB (ms) | RMSNorm_py-FB (ms) | TritonRMS-FB (ms) | LayerNorm-FB (ms) |")
     print("|-----------:|------------------:|------------------:|------------------:|------------------:|")
 
     for dim in DIMS:
