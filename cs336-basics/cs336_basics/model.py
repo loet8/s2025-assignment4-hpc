@@ -4,8 +4,13 @@ from __future__ import annotations
 import json
 import logging
 import math
-import os
+import os, sys
+
+repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
+sys.path.insert(0, repo_root)
+
 from typing import Optional
+from tests import adapters
 
 import torch
 import torch.nn as nn
@@ -49,9 +54,12 @@ class RMSNorm(nn.Module):
         Returns:
             FloatTensor of same shape as input
         """
-        rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-        x = x * rms
-        return self.weight * x
+        # rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        # x = x * rms
+        # return self.weight * x
+
+        func = adapters.get_rmsnorm_autograd_function_triton()
+        return func.apply(x, self.weight, self.eps)
 
 
 class BasicsTransformerLM(nn.Module):
