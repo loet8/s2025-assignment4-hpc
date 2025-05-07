@@ -260,7 +260,7 @@ def benchmark_norms_fb():
 
         mods = {
             "RMSNorm": RMSNorm(hidden_size=dim).to(device).eval(),
-            "RMSNorm_pyc": RMSNormPyFunctionWrapper(dim).to(device).eval(),
+            "RMSNorm_py": RMSNormPyFunctionWrapper(dim).to(device).eval(),
             "Triton": RMSNormTritonWrapper(dim).to(device).eval(),
             "LayerNorm":     LayerNorm(dim).to(device).eval()
         }
