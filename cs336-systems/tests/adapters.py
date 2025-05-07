@@ -30,11 +30,11 @@ def get_rmsnorm_autograd_function_pytorch() -> Type:
 
         @staticmethod
         def backward(ctx, grad_output):
-            #x, g = ctx.saved_tensors
-            #eps = ctx.eps
-            #dg = rmsnorm_backward_g_pytorch(grad_output, x, g)
-            #dx = rmsnorm_backward_x_pytorch(grad_output, x, g)
-            #return dx, dg
+            x, g = ctx.saved_tensors
+            eps = ctx.eps
+            dg = rmsnorm_backward_g_pytorch(grad_output, x, g)
+            dx = rmsnorm_backward_x_pytorch(grad_output, x, g)
+            return dx, dg
 
             raise NotImplementedError("RMSNormForwardOnly only implements the forward pass")
 
@@ -138,36 +138,36 @@ def get_rmsnorm_autograd_function_triton() -> Type:
 
         @staticmethod
         def backward(ctx, grad_output):
-            #x, weight = ctx.saved_tensors
-            #H    = ctx.H
-           # eps  = ctx.eps
-            #orig_shape = grad_output.shape
+            x, weight = ctx.saved_tensors
+            H    = ctx.H
+            eps  = ctx.eps
+            orig_shape = grad_output.shape
 
-            #M = grad_output.numel() // H
-            #x_flat  = x.contiguous().view(M, H)
-            #gy_flat = grad_output.contiguous().view(M, H)
+            M = grad_output.numel() // H
+            x_flat  = x.contiguous().view(M, H)
+            gy_flat = grad_output.contiguous().view(M, H)
 
-            #dx_flat  = torch.empty_like(x_flat)
-            #pdg_flat = torch.empty_like(x_flat)   
+            dx_flat  = torch.empty_like(x_flat)
+            pdg_flat = torch.empty_like(x_flat)   
 
-           # stride_xm, stride_xn = H, 1
-           # stride_wn = weight.stride(0)
-           # stride_pgm, stride_pgn = H, 1
+            stride_xm, stride_xn = H, 1
+            stride_wn = weight.stride(0)
+            stride_pgm, stride_pgn = H, 1
 
-            #grid = (M,)
-           # _rmsnorm_bwd_fused_kernel[grid](
-           #     x_flat, weight, gy_flat,
-            #    dx_flat, pdg_flat,
-            #    stride_xm, stride_xn, stride_wn,
-            #    stride_pgm, stride_pgn,
-            #    M, H, eps,
-            #    BLOCK=1024, num_warps=4
-            #)
+            grid = (M,)
+            _rmsnorm_bwd_fused_kernel[grid](
+                x_flat, weight, gy_flat,
+                dx_flat, pdg_flat,
+                stride_xm, stride_xn, stride_wn,
+                stride_pgm, stride_pgn,
+                M, H, eps,
+                BLOCK=1024, num_warps=4
+            )
 
-            #dx = dx_flat.view(orig_shape)
-           # dg = pdg_flat.sum(dim=0)
+            dx = dx_flat.view(orig_shape)
+            dg = pdg_flat.sum(dim=0)
 
-          #  return dx, dg, None
+            return dx, dg, None
             raise NotImplementedError("TritonForwardOnly only implements the forward pass")
 
 
