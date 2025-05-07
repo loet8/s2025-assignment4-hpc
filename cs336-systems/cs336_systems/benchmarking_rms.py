@@ -190,7 +190,7 @@ class RMSNormPyFunctionWrapper(torch.nn.Module):
         self.func = adapters.get_rmsnorm_autograd_function_pytorch()
 
     def forward(self, x: torch.Tensor):
-        return self.func.apply(x, self.weight, self.eps)
+        return self.func.apply(x, self.weight)
 
 class RMSNormTritonWrapper(torch.nn.Module):
     def __init__(self, hidden_size: int, eps: float = 1e-5):
@@ -200,7 +200,7 @@ class RMSNormTritonWrapper(torch.nn.Module):
         self.func = adapters.get_rmsnorm_autograd_function_triton()
 
     def forward(self, x: torch.Tensor):
-        return self.func.apply(x, self.weight, self.eps)
+        return self.func.apply(x, self.weight)
 
 
 def benchmark_norms():
