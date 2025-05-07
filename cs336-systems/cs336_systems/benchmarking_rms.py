@@ -242,7 +242,7 @@ def benchmark_norms():
         t_tr = time_it(rms_tr)
         t_ln     = time_it(ln)
 
-        print(f"| {dim:4d} | {t_norm:15.3f} | {t_py:15.3f} | {t_tr:15.3f} | {t_ln:15.3f} |")
+        print(f"| {dim:4d} | {t_py:15.3f} | {t_tr:15.3f} | {t_ln:15.3f} |")
 
 def main():
     args = parse_args()
