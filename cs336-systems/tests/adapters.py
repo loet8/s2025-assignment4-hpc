@@ -44,7 +44,6 @@ def get_rmsnorm_autograd_function_pytorch() -> Type:
     raise NotImplementedError
     
 @triton.jit
-
 def _rmsnorm_fwd_kernel(
         X_ptr, W_ptr, Out_ptr,
         stride_xm, stride_xn, stride_wn,
@@ -66,7 +65,8 @@ def _rmsnorm_fwd_kernel(
         y = x * inv_rms * w
 
         tl.store(Out_ptr + row * stride_xm + col * stride_xn, y, mask=mask)
-        
+
+@triton.jit       
 def _rmsnorm_bwd_fused_kernel(
     X_ptr, W_ptr, GY_ptr, DX_ptr, PDG_ptr,
     stride_xm, stride_xn, stride_wn,
