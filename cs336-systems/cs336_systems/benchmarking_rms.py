@@ -15,6 +15,7 @@ from torch.utils.checkpoint import checkpoint
 from torch.nn import LayerNorm
 from tests import adapters
 from functools import partial
+import torch
 
 
 def parse_args():
@@ -210,14 +211,15 @@ def benchmark_norms():
     DIMS   = [1024, 2048, 4096, 8192]
     N_ITERS = 1000
 
-    print("| hidden_dim | RMSNorm (ms) | RMSNorm_py (ms) | TritonRMS (ms) | LayerNorm (ms) |")
-    print("|-----------:|-------------:|---------------:|---------------:|---------------:|")
+    print("| hidden_dim | RMSNorm (ms) | RMSNorm_py (ms) | RMSNorm_py Compiled (ms) | TritonRMS (ms) | LayerNorm (ms) |")
+    print("|-----------:|-------------:|----------------:|-------------------------:|---------------:|---------------:|")
 
     for dim in DIMS:
         x = torch.randn(N_ROWS, dim, device=device, dtype=torch.float32)
 
         rms_norm = RMSNorm(hidden_size=dim).to(device).eval()
         rms_py = RMSNormPyFunctionWrapper(hidden_size=dim).to(device).eval()
+        rms_py_c = torch.compile(rms_py)
         rms_tr = RMSNormTritonWrapper(hidden_size=dim).to(device).eval()
 
         ln  = LayerNorm(dim).to(device).eval()
@@ -225,6 +227,7 @@ def benchmark_norms():
         for _ in range(10):
             _ = rms_norm(x)
             _ = rms_py(x) 
+            _ = rms_py_c(x)
             _ = rms_tr(x)
             _ = ln(x)
         if device.type == "cuda":
@@ -240,10 +243,12 @@ def benchmark_norms():
 
         t_norm = time_it(rms_norm)
         t_py   = time_it(rms_py)
+        t_py_c = time_it(rms_py_c)
         t_tr = time_it(rms_tr)
         t_ln     = time_it(ln)
 
-        print(f"| {dim:4d} | {t_norm:15.3f} | {t_py:15.3f} | {t_tr:15.3f} | {t_ln:15.3f} |")
+
+        print(f"| {dim:4d} | {t_norm:15.3f} | {t_py:15.3f} | {t_py_c:15.3f} | {t_tr:15.3f} | {t_ln:15.3f} |")
 
 def benchmark_norms_fb():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
