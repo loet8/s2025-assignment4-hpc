@@ -11,6 +11,7 @@ import argparse, timeit, torch, statistics
 from typing import Callable, List
 from torch.utils.checkpoint import checkpoint  
 from torch.nn import LayerNorm
+from tests import adapters
 from functools import partial
 
 
@@ -179,37 +180,67 @@ def profile_xl(args):
     create_flame_graph(stacks_file, svg_file)
     print(f"Flame graph written to {svg_file}")
 
+class RMSNormPyFunctionWrapper(torch.nn.Module):
+    def __init__(self, hidden_size: int, eps: float = 1e-5):
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.ones(hidden_size))
+        self.eps = eps
+        self.func = adapters.get_rmsnorm_autograd_function_pytorch()
+
+    def forward(self, x: torch.Tensor):
+        return self.func.apply(x, self.weight, self.eps)
+
+class RMSNormTritonWrapper(torch.nn.Module):
+    def __init__(self, hidden_size: int, eps: float = 1e-5):
+        super().__init__()
+        self.weight = torch.nn.Parameter(torch.ones(hidden_size))
+        self.eps = eps
+        self.func = adapters.get_rmsnorm_autograd_function_triton()
+
+    def forward(self, x: torch.Tensor):
+        return self.func.apply(x, self.weight, self.eps)
+
+
 def benchmark_norms():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     N_ROWS = 50_000
     DIMS   = [1024, 2048, 4096, 8192]
     N_ITERS = 1000
 
-    print("| hidden_dim | RMSNorm (ms) | LayerNorm (ms) |")
-    print("|-----------:|-------------:|---------------:|")
+    print("| hidden_dim | RMSNorm (ms) | TritonRMS (ms) | LayerNorm (ms) |")
+    print("|-----------:|-------------:|---------------:|---------------:|")
 
     for dim in DIMS:
         x = torch.randn(N_ROWS, dim, device=device, dtype=torch.float32)
 
-        rms = RMSNorm(hidden_size=dim).to(device).eval()
+        rms_norm = RMSNorm(hidden_size=dim).to(device).eval()
+        rms_py = RMSNormPyFunctionWrapper(hidden_size=dim).to(device).eval()
+        rms_tr = RMSNormTritonWrapper(hidden_size=dim).to(device).eval()
+
         ln  = LayerNorm(dim).to(device).eval()
 
         for _ in range(10):
-            _ = rms(x); _ = ln(x)
+            _ = rms_norm(x)
+            _ = rms_py(x) 
+            _ = rms_tr(x)
+            _ = ln(x)
         if device.type == "cuda":
             torch.cuda.synchronize()
 
-        t_rms = timeit.repeat(lambda: rms(x), repeat=3, number=N_ITERS)
-        if device.type == "cuda":
-            torch.cuda.synchronize()
-        ms_rms = statistics.mean(t_rms) / N_ITERS * 1000
+        def time_it(m: torch.nn.Module):
+            t = statistics.mean(
+                timeit.repeat(lambda: m(x), repeat=3, number=N_ITERS)
+            )
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            return (t / N_ITERS) * 1000
 
-        t_ln = timeit.repeat(lambda: ln(x), repeat=3, number=N_ITERS)
-        if device.type == "cuda":
-            torch.cuda.synchronize()
-        ms_ln = statistics.mean(t_ln) / N_ITERS * 1000
+        t_norm = time_it(rms_norm)
+        t_py   = time_it(rms_py)
+        t_tr = time_it(rms_tr)
+        t_ln     = time_it(ln)
 
-        print(f"| {dim:10d} | {ms_rms:12.3f} | {ms_ln:14.3f} |")
+        print(f"| {dim:4d} | {t_norm:17.3f} | {t_py:14.3f} | {t_tr:13.3f} | {t_ln:14.3f} |")
 
 def main():
     args = parse_args()
