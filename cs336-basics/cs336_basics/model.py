@@ -54,12 +54,12 @@ class RMSNorm(nn.Module):
         Returns:
             FloatTensor of same shape as input
         """
-        #rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-        #x = x * rms
-        #return self.weight * x
+        rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        x = x * rms
+        return self.weight * x
 
-        func = adapters.get_rmsnorm_autograd_function_triton()
-        return func.apply(x, self.weight, self.eps)
+        #func = adapters.get_rmsnorm_autograd_function_triton()
+        #return func.apply(x, self.weight, self.eps)
 
 
 class BasicsTransformerLM(nn.Module):
