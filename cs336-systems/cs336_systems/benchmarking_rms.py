@@ -211,7 +211,7 @@ def benchmark_norms():
     N_ITERS = 1000
 
     print("| hidden_dim | RMSNorm (ms) | RMSNorm_py (ms) | TritonRMS (ms) | LayerNorm (ms) |")
-    print("|-----------:|-------------:|---------------:|---------------:|")
+    print("|-----------:|-------------:|---------------:|---------------:|---------------:|")
 
     for dim in DIMS:
         x = torch.randn(N_ROWS, dim, device=device, dtype=torch.float32)
