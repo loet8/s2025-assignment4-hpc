@@ -35,6 +35,7 @@ def parse_args():
     p.add_argument("--gradient_checkpointing", action="store_true")
     p.add_argument("--norm_benchmark", action="store_true")
     p.add_argument("--norm_type", choices=["rms","layer"])
+    p.add_argument("--norm_fb", action="store_true")
 
     return p.parse_args()
 
@@ -209,7 +210,7 @@ def benchmark_norms():
     DIMS   = [1024, 2048, 4096, 8192]
     N_ITERS = 1000
 
-    print("| hidden_dim | RMSNorm (ms) | TritonRMS (ms) | LayerNorm (ms) |")
+    print("| hidden_dim | RMSNorm (ms) | RMSNorm_py (ms) | TritonRMS (ms) | LayerNorm (ms) |")
     print("|-----------:|-------------:|---------------:|---------------:|")
 
     for dim in DIMS:
@@ -242,7 +243,51 @@ def benchmark_norms():
         t_tr = time_it(rms_tr)
         t_ln     = time_it(ln)
 
-        print(f"| {dim:4d} | {t_py:15.3f} | {t_tr:15.3f} | {t_ln:15.3f} |")
+        print(f"| {dim:4d} | {t_norm:15.3f} | {t_py:15.3f} | {t_tr:15.3f} | {t_ln:15.3f} |")
+
+def benchmark_norms_fb():
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    N_ROWS = 50_000
+    DIMS   = [1024, 2048, 4096, 8192]
+    N_ITERS = 1000
+
+    print("| hidden_dim | RMSNorm-FB (ms) | -FB (ms) | TritonRMS-FB (ms) | LayerNorm-FB (ms) |")
+    print("|-----------:|------------------:|------------------:|------------------:|------------------:|")
+
+    for dim in DIMS:
+        x = torch.randn(N_ROWS, dim, device=device).requires_grad_(True)
+        dy = torch.randn_like(x)
+
+        mods = {
+            "RMSNorm": RMSNorm(hidden_size=dim).to(device).eval(),
+            "RMSNorm_pyc": RMSNormPyFunctionWrapper(dim).to(device).eval(),
+            "Triton": RMSNormTritonWrapper(dim).to(device).eval(),
+            "LayerNorm":     LayerNorm(dim).to(device).eval()
+        }
+
+        for _ in range(10):
+            for m in mods.values():
+                out = m(x)
+                out.backward(dy, retain_graph=True)
+                x.grad         = None
+                m.weight.grad  = None
+        if device.type == "cuda":
+            torch.cuda.synchronize()
+
+        def time_mod_fb(m):
+            def run_once():
+                out = m(x)
+                out.backward(dy, retain_graph=True)
+                x.grad        = None
+                m.weight.grad = None
+            t = statistics.mean(timeit.repeat(run_once, repeat=3, number=N_ITERS))
+            if device.type == "cuda":
+                torch.cuda.synchronize()
+            return (t / N_ITERS) * 1000
+
+        times_fb = {k: time_mod_fb(m) for k,m in mods.items()}
+
+        print(f"| {dim:4d} | {times_fb['RMSNorm']:17.3f} | {times_fb['RMSNorm_py']:17.3f} | {times_fb['Triton']:17.3f} | {times_fb['LayerNorm']:17.3f} |")
 
 def main():
     args = parse_args()
@@ -259,7 +304,10 @@ def main():
         desc = "FWD+BWD"
 
     if args.norm_benchmark:
-        benchmark_norms()
+        if args.norm_fb:
+            benchmark_norms_fb()
+        else:
+            benchmark_norms()
         return
 
     benchmark(desc, runner, args.warmup_steps, args.measure_steps)
