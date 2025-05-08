@@ -1,6 +1,5 @@
 import sys, os
-# sys.path.insert(0, "/content/s2025-assignment4-hpc/cs336-basics")
-# sys.path.insert(0, "/content/s2025-assignment4-hpc/cs336-systems")
+
 
 repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
 sys.path.insert(0, os.path.join(repo_root, "cs336-systems"))
@@ -16,7 +15,7 @@ import argparse, timeit, torch, statistics
 from typing import Callable, List
 from torch.utils.checkpoint import checkpoint  
 from torch.nn import LayerNorm
-from cs336_basics.tests import adapters
+from tests import adapters
 from functools import partial
 import torch
 

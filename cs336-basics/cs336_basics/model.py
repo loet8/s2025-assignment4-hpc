@@ -6,11 +6,13 @@ import logging
 import math
 import os, sys
 
+
 repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
+sys.path.insert(0, os.path.join(repo_root, "cs336-systems"))
 sys.path.insert(0, repo_root)
 
 from typing import Optional
-from cs336_basics.tests import adapters
+from tests import adapters
 
 import torch
 import torch.nn as nn
