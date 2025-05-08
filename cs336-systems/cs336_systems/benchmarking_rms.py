@@ -1,5 +1,7 @@
 import sys, os
 sys.path.insert(0, "/content/s2025-assignment4-hpc/cs336-basics")
+sys.path.insert(0, "/content/s2025-assignment4-hpc/cs336-systems")
+
 # repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
 # sys.path.insert(0, repo_root)
 
