@@ -10,7 +10,7 @@ repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
 sys.path.insert(0, repo_root)
 
 from typing import Optional
-from tests import adapters
+from cs336_basics.tests import adapters
 
 import torch
 import torch.nn as nn
