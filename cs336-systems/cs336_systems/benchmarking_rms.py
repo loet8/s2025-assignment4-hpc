@@ -35,7 +35,7 @@ def parse_args():
     p.add_argument("--mixed_precision", action="store_true")
     p.add_argument("--gradient_checkpointing", action="store_true")
     p.add_argument("--norm_benchmark", action="store_true")
-    p.add_argument("--norm_type", choices=["rms","layer"])
+    p.add_argument("--norm_type", choices=["rms","layer", "triton"])
     p.add_argument("--norm_fb", action="store_true")
 
     return p.parse_args()
@@ -202,7 +202,7 @@ class RMSNormTritonWrapper(torch.nn.Module):
         self.func = adapters.get_rmsnorm_autograd_function_triton()
 
     def forward(self, x: torch.Tensor):
-        return self.func.apply(x, self.weight)
+        return self.func.apply(x, self.weight, self.eps)
 
 
 def benchmark_norms():

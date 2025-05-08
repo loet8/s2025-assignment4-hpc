@@ -109,7 +109,7 @@ def get_rmsnorm_autograd_function_triton() -> Type:
 
     class RMSNormTriton(Function):
         @staticmethod
-        def forward(ctx, x: Tensor, weight: Tensor, eps: float = 1e-5) -> Tensor:
+        def forward(ctx, x: Tensor, weight: Tensor, eps: float ) -> Tensor:
             orig_shape = x.shape
             H = orig_shape[-1]
             M = x.numel() // H

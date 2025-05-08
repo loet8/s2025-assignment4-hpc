@@ -20,6 +20,15 @@ from .nn_utils import softmax
 
 logger = logging.getLogger(__name__)
 
+class TritonRMSNorm(nn.Module):
+    def __init__(self, hidden_size: int, eps: float = 1e-5):
+        super().__init__()
+        self.weight = nn.Parameter(torch.ones(hidden_size))
+        self.eps = eps
+        self.func = adapters.get_rmsnorm_autograd_function_triton()
+
+    def forward(self, x: torch.Tensor):
+        return self.func.apply(x, self.weight, self.eps)
 
 class RMSNorm(nn.Module):
     """
@@ -58,8 +67,6 @@ class RMSNorm(nn.Module):
         x = x * rms
         return self.weight * x
 
-        #func = adapters.get_rmsnorm_autograd_function_triton()
-        #return func.apply(x, self.weight, self.eps)
 
 
 class BasicsTransformerLM(nn.Module):
@@ -130,8 +137,12 @@ class BasicsTransformerLM(nn.Module):
         )
         if norm_type == "rms":
             self.ln_final = RMSNorm(d_model)
-        else:
+        elif norm_type == "triton":
+            self.ln_final = TritonRMSNorm(d_model)
+        elif norm_type == "layer":
             self.ln_final = nn.LayerNorm(d_model)
+        else:
+            raise  ValueError(f"Unknown norm_type {norm_type!r}")
         self.lm_head = nn.Linear(d_model, vocab_size, bias=False)
         self.lm_head.weight = self.token_embeddings.weight
         self.residual_pdrop = residual_pdrop
@@ -303,6 +314,19 @@ class TransformerBlock(nn.Module):
             num_heads=num_heads,
             attn_pdrop=attn_pdrop,
         )
+        
+        if norm_type == "rms":
+            self.ln1 = RMSNorm(d_model)
+            self.ln2 = RMSNorm(d_model)
+        elif norm_type == "triton":
+            self.ln1 = TritonRMSNorm(d_model)            
+            self.ln2 = TritonRMSNorm(d_model)
+        elif norm_type == "layer":
+            self.ln1 = nn.LayerNorm(d_model)
+            self.ln2 = nn.LayerNorm(d_model)
+        else:
+            raise  ValueError(f"Unknown norm_type {norm_type!r}")
+        
         if norm_type == "rms":
             self.ln1 = RMSNorm(d_model)
             self.ln2 = RMSNorm(d_model)
