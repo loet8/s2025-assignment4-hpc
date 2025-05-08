@@ -1,10 +1,10 @@
 import sys, os
 
 
-repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
+repo_root = os.path.abspath(os.path.join(__file__, "..", "..", ".."))
+sys.path.insert(0, repo_root)
 sys.path.insert(0, os.path.join(repo_root, "cs336-basics"))
 sys.path.insert(0, os.path.join(repo_root, "cs336-systems"))
-sys.path.insert(0, repo_root)
 
 from torch.profiler import profile, record_function, ProfilerActivity
 from torch.optim import AdamW
