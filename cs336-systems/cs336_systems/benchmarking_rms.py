@@ -37,6 +37,7 @@ def parse_args():
     p.add_argument("--norm_benchmark", action="store_true")
     p.add_argument("--norm_type", choices=["rms","layer", "triton"])
     p.add_argument("--norm_fb", action="store_true")
+    p.add_argument("--compile_model", action="store_true")
 
     return p.parse_args()
 
@@ -77,6 +78,9 @@ def make_run(args) -> Callable:
         d_ff=args.d_ff,
         norm_type=args.norm_type,
     ).to(device)
+    
+    if args.compile_model:
+        model = torch.compile
     model.train()
 
     inputs = torch.randint(low=0, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
