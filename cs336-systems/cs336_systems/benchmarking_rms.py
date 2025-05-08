@@ -80,7 +80,7 @@ def make_run(args) -> Callable:
     ).to(device)
     
     if args.compile_model:
-        model = torch.compile
+        model = torch.compile(model)
     model.train()
 
     inputs = torch.randint(low=0, high=args.vocab_size,size=(args.batch_size, args.seq_len), device=device, dtype=torch.long)
