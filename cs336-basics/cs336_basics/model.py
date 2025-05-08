@@ -13,7 +13,7 @@ sys.path.insert(0, os.path.join(repo_root, "cs336-systems"))
 sys.path.insert(0, repo_root)
 
 from typing import Optional
-from tests import adapters
+from cs336_systems.tests import adapters
 
 import torch
 import torch.nn as nn
