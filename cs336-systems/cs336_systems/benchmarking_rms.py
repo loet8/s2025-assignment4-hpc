@@ -15,7 +15,7 @@ import argparse, timeit, torch, statistics
 from typing import Callable, List
 from torch.utils.checkpoint import checkpoint  
 from torch.nn import LayerNorm
-from tests import adapters
+from cs336_basics.tests import adapters
 from functools import partial
 import torch
 
