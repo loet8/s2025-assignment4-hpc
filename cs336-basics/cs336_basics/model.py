@@ -19,6 +19,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 
+
 from .nn_utils import softmax
 
 logger = logging.getLogger(__name__)

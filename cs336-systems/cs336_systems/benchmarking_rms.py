@@ -6,7 +6,8 @@ sys.path.insert(0, repo_root)
 sys.path.insert(0, os.path.join(repo_root, "cs336-basics"))
 sys.path.insert(0, os.path.join(repo_root, "cs336-systems"))
 
-from torch.profiler import profile, record_function, ProfilerActivity
+from torch.profiler import profile, record_function, ProfilerActivity, schedule
+import torch.cuda.memory as _mem
 from torch.optim import AdamW
 from contextlib import nullcontext
 from torch.cuda.amp    import autocast
@@ -41,6 +42,7 @@ def parse_args():
     p.add_argument("--norm_type", choices=["rms","layer", "triton"])
     p.add_argument("--norm_fb", action="store_true")
     p.add_argument("--compile_model", action="store_true")
+    p.add_argument("--mem-profile", action="store_true")
 
     return p.parse_args()
 
@@ -320,6 +322,30 @@ def main():
             benchmark_norms_fb()
         else:
             benchmark_norms()
+        return
+    
+    if args.mem_profile:
+        _mem._record_memory_history(max_entries=1_000_000)
+
+        n_steps = args.measure_steps
+        with profile(
+            activities=[ProfilerActivity.CPU, ProfilerActivity.CUDA],
+            schedule=schedule(wait=0, warmup=0, active=1, repeat=n_steps),
+            record_shapes=True,
+            profile_memory=True,
+            with_stack=True,
+        ) as mem_prof:
+            for _ in range(n_steps):
+                runner()            
+                mem_prof.step()     
+                if torch.cuda.is_available():
+                    torch.cuda.synchronize()
+
+        mem_prof.export_memory_timeline("timeline.html", device=get_device())
+        _mem._dump_snapshot("memory_snapshot.pickle")
+        _mem._record_memory_history(enabled=None)
+
+        print("Wrote timeline.html & memory_snapshot.pickle")
         return
 
     benchmark(desc, runner, args.warmup_steps, args.measure_steps)
