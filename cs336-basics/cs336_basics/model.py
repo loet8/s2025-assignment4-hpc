@@ -6,16 +6,11 @@ import logging
 import math
 import os, sys
 
-<<<<<<< Updated upstream
 
 repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
 sys.path.insert(0, repo_root)
 sys.path.insert(0, os.path.join(repo_root, "cs336-basics"))
 sys.path.insert(0, os.path.join(repo_root, "cs336-systems"))
-=======
-repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
-sys.path.insert(0, repo_root)
->>>>>>> Stashed changes
 
 from typing import Optional
 from tests import adapters
