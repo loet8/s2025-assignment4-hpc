@@ -275,7 +275,7 @@ def benchmark_norms_fb():
         mods = {
             "RMSNorm": RMSNorm(hidden_size=dim).to(device).eval(),
             "RMSNorm_py": RMSNormPyFunctionWrapper(dim).to(device).eval(),
-            "Compiled_RMSNorm_py": torch.compile(rms_py),
+            "Compiled_RMSNorm_py": torch.compile("RMSNorm_py"),
             "Triton": RMSNormTritonWrapper(dim).to(device).eval(),
             "LayerNorm":     LayerNorm(dim).to(device).eval()
         }
