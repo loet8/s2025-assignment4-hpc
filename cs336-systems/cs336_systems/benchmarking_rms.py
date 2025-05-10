@@ -265,18 +265,26 @@ def benchmark_norms_fb():
     DIMS   = [1024, 2048, 4096, 8192]
     N_ITERS = 1000
 
-    print("| hidden_dim | RMSNorm-FB (ms) | RMSNorm_py-FB (ms) | TritonRMS-FB (ms) | LayerNorm-FB (ms) |")
-    print("|-----------:|------------------:|------------------:|------------------:|------------------:|")
+    print("| hidden_dim | RMSNorm-FB (ms) | RMSNorm_py-FB (ms) | RMSNorm_py Compiled (ms) | TritonRMS-FB (ms) | LayerNorm-FB (ms) |")
+    print("|-----------:|----------------:|-------------------:|-------------------------:|------------------:|------------------:|")
 
     for dim in DIMS:
         x = torch.randn(N_ROWS, dim, device=device).requires_grad_(True)
         dy = torch.randn_like(x)
 
+        rms_norm = RMSNorm(hidden_size=dim).to(device).eval()
+        rms_py = RMSNormPyFunctionWrapper(hidden_size=dim).to(device).eval()
+        rms_py_c = torch.compile(rms_py)
+        rms_tr = RMSNormTritonWrapper(hidden_size=dim).to(device).eval()
+        ln  = LayerNorm(dim).to(device).eval()
+
+
         mods = {
-            "RMSNorm": RMSNorm(hidden_size=dim).to(device).eval(),
-            "RMSNorm_py": RMSNormPyFunctionWrapper(dim).to(device).eval(),
-            "Triton": RMSNormTritonWrapper(dim).to(device).eval(),
-            "LayerNorm":     LayerNorm(dim).to(device).eval()
+            "RMSNorm": rms_norm,
+            "RMSNorm_py": rms_py,
+            "Compiled_RMSNorm_py": rms_py_c,
+            "Triton": rms_tr,
+            "LayerNorm":  ln,
         }
 
         for _ in range(10):
@@ -301,7 +309,7 @@ def benchmark_norms_fb():
 
         times_fb = {k: time_mod_fb(m) for k,m in mods.items()}
 
-        print(f"| {dim:4d} | {times_fb['RMSNorm']:17.3f} | {times_fb['RMSNorm_py']:17.3f} | {times_fb['Triton']:17.3f} | {times_fb['LayerNorm']:17.3f} |")
+        print(f"| {dim:4d} | {times_fb['RMSNorm']:17.3f} | {times_fb['RMSNorm_py']:17.3f} | {times_fb['Compiled_RMSNorm_py']:17.3f} | {times_fb['Triton']:17.3f} | {times_fb['LayerNorm']:17.3f} |")
 
 def main():
     args = parse_args()
