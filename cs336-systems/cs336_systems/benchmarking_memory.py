@@ -203,7 +203,11 @@ class RMSNormPyFunctionWrapper(torch.nn.Module):
         self.func = adapters.get_rmsnorm_autograd_function_pytorch()
 
     def forward(self, x: torch.Tensor):
+<<<<<<< Updated upstream:cs336-systems/cs336_systems/benchmarking_memory.py
         return self.func.apply(x, self.weight)
+=======
+        return self.func.apply(x, self.weight, self.eps)
+>>>>>>> Stashed changes:cs336-systems/cs336_systems/benchmarking_mixed_precision.py
 
 class RMSNormTritonWrapper(torch.nn.Module):
     def __init__(self, hidden_size: int, eps: float = 1e-5):
@@ -222,15 +226,23 @@ def benchmark_norms():
     DIMS   = [1024, 2048, 4096, 8192]
     N_ITERS = 1000
 
+<<<<<<< Updated upstream:cs336-systems/cs336_systems/benchmarking_memory.py
     print("| hidden_dim | RMSNorm (ms) | RMSNorm_py (ms) | RMSNorm_py Compiled (ms) | TritonRMS (ms) | LayerNorm (ms) |")
     print("|-----------:|-------------:|----------------:|-------------------------:|---------------:|---------------:|")
+=======
+    print("| hidden_dim | RMSNorm (ms) | TritonRMS (ms) | LayerNorm (ms) |")
+    print("|-----------:|-------------:|---------------:|---------------:|")
+>>>>>>> Stashed changes:cs336-systems/cs336_systems/benchmarking_mixed_precision.py
 
     for dim in DIMS:
         x = torch.randn(N_ROWS, dim, device=device, dtype=torch.float32)
 
         rms_norm = RMSNorm(hidden_size=dim).to(device).eval()
         rms_py = RMSNormPyFunctionWrapper(hidden_size=dim).to(device).eval()
+<<<<<<< Updated upstream:cs336-systems/cs336_systems/benchmarking_memory.py
         rms_py_c = torch.compile(rms_py)
+=======
+>>>>>>> Stashed changes:cs336-systems/cs336_systems/benchmarking_mixed_precision.py
         rms_tr = RMSNormTritonWrapper(hidden_size=dim).to(device).eval()
 
         ln  = LayerNorm(dim).to(device).eval()
@@ -238,7 +250,10 @@ def benchmark_norms():
         for _ in range(10):
             _ = rms_norm(x)
             _ = rms_py(x) 
+<<<<<<< Updated upstream:cs336-systems/cs336_systems/benchmarking_memory.py
             _ = rms_py_c(x)
+=======
+>>>>>>> Stashed changes:cs336-systems/cs336_systems/benchmarking_mixed_precision.py
             _ = rms_tr(x)
             _ = ln(x)
         if device.type == "cuda":
@@ -251,6 +266,7 @@ def benchmark_norms():
             if device.type == "cuda":
                 torch.cuda.synchronize()
             return (t / N_ITERS) * 1000
+<<<<<<< Updated upstream:cs336-systems/cs336_systems/benchmarking_memory.py
 
         t_norm = time_it(rms_norm)
         t_py   = time_it(rms_py)
@@ -304,6 +320,15 @@ def benchmark_norms_fb():
         times_fb = {k: time_mod_fb(m) for k,m in mods.items()}
 
         print(f"| {dim:4d} | {times_fb['RMSNorm']:17.3f} | {times_fb['RMSNorm_py']:17.3f} | {times_fb['Triton']:17.3f} | {times_fb['LayerNorm']:17.3f} |")
+=======
+
+        t_norm = time_it(rms_norm)
+        t_py   = time_it(rms_py)
+        t_tr = time_it(rms_tr)
+        t_ln     = time_it(ln)
+
+        print(f"| {dim:4d} | {t_py:15.3f} | {t_tr:15.3f} | {t_ln:15.3f} |")
+>>>>>>> Stashed changes:cs336-systems/cs336_systems/benchmarking_mixed_precision.py
 
 def main():
     args = parse_args()

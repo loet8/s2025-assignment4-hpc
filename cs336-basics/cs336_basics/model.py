@@ -6,11 +6,16 @@ import logging
 import math
 import os, sys
 
+<<<<<<< Updated upstream
 
 repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
 sys.path.insert(0, repo_root)
 sys.path.insert(0, os.path.join(repo_root, "cs336-basics"))
 sys.path.insert(0, os.path.join(repo_root, "cs336-systems"))
+=======
+repo_root = os.path.abspath(os.path.join(__file__, "..", ".."))
+sys.path.insert(0, repo_root)
+>>>>>>> Stashed changes
 
 from typing import Optional
 from tests import adapters
@@ -67,9 +72,12 @@ class RMSNorm(nn.Module):
         Returns:
             FloatTensor of same shape as input
         """
-        rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
-        x = x * rms
-        return self.weight * x
+        # rms = torch.rsqrt(x.pow(2).mean(-1, keepdim=True) + self.eps)
+        # x = x * rms
+        # return self.weight * x
+
+        func = adapters.get_rmsnorm_autograd_function_triton()
+        return func.apply(x, self.weight, self.eps)
 
 
 
