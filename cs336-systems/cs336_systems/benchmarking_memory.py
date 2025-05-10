@@ -74,7 +74,6 @@ def forward_blocks(x: torch.Tensor, model: Transformer, args) -> torch.Tensor:
 
 def make_run(args) -> Callable:
     device = get_device()
-    optimizer = AdamW(model.parameters())
     model = Transformer(
         vocab_size=args.vocab_size,
         context_length = args.seq_len,
@@ -84,6 +83,8 @@ def make_run(args) -> Callable:
         d_ff=args.d_ff,
         norm_type=args.norm_type,
     ).to(device)
+    
+    optimizer = AdamW(model.parameters())
     
     if args.compile_model:
         model = torch.compile(model)
