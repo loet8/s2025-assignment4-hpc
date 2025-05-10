@@ -85,7 +85,7 @@ def make_run(args) -> Callable:
     ).to(device)
     
     optimizer = AdamW(model.parameters())
-    
+
     if args.compile_model:
         model = torch.compile(model)
     model.train()
@@ -337,6 +337,9 @@ def main():
         return
     
     if args.mem_profile:
+
+        torch.cuda.empty_cache()
+
         _mem._record_memory_history(max_entries=1_000_000)
 
         n_steps = args.measure_steps
