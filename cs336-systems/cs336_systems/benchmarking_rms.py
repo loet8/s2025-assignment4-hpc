@@ -272,12 +272,19 @@ def benchmark_norms_fb():
         x = torch.randn(N_ROWS, dim, device=device).requires_grad_(True)
         dy = torch.randn_like(x)
 
+        rms_norm = RMSNorm(hidden_size=dim).to(device).eval()
+        rms_py = RMSNormPyFunctionWrapper(hidden_size=dim).to(device).eval()
+        rms_py_c = torch.compile(rms_py)
+        rms_tr = RMSNormTritonWrapper(hidden_size=dim).to(device).eval()
+        ln  = LayerNorm(dim).to(device).eval()
+
+
         mods = {
-            "RMSNorm": RMSNorm(hidden_size=dim).to(device).eval(),
-            "RMSNorm_py": RMSNormPyFunctionWrapper(dim).to(device).eval(),
-            "Compiled_RMSNorm_py": torch.compile("RMSNorm_py"),
-            "Triton": RMSNormTritonWrapper(dim).to(device).eval(),
-            "LayerNorm":     LayerNorm(dim).to(device).eval()
+            "RMSNorm": rms_norm,
+            "RMSNorm_py": rms_py,
+            "Compiled_RMSNorm_py": rms_py_c,
+            "Triton": rms_tr,
+            "LayerNorm":  ln,
         }
 
         for _ in range(10):
