@@ -265,8 +265,8 @@ def benchmark_norms_fb():
     DIMS   = [1024, 2048, 4096, 8192]
     N_ITERS = 1000
 
-    print("| hidden_dim | RMSNorm-FB (ms) | RMSNorm_py-FB (ms) | TritonRMS-FB (ms) | LayerNorm-FB (ms) |")
-    print("|-----------:|------------------:|------------------:|------------------:|------------------:|")
+    print("| hidden_dim | RMSNorm-FB (ms) | RMSNorm_py-FB (ms) | RMSNorm_py Compiled (ms) | TritonRMS-FB (ms) | LayerNorm-FB (ms) |")
+    print("|-----------:|----------------:|-------------------:|-------------------------:|------------------:|------------------:|")
 
     for dim in DIMS:
         x = torch.randn(N_ROWS, dim, device=device).requires_grad_(True)
@@ -275,6 +275,7 @@ def benchmark_norms_fb():
         mods = {
             "RMSNorm": RMSNorm(hidden_size=dim).to(device).eval(),
             "RMSNorm_py": RMSNormPyFunctionWrapper(dim).to(device).eval(),
+            "Compiled_RMSNorm_py": torch.compile(rms_py)
             "Triton": RMSNormTritonWrapper(dim).to(device).eval(),
             "LayerNorm":     LayerNorm(dim).to(device).eval()
         }
@@ -301,7 +302,7 @@ def benchmark_norms_fb():
 
         times_fb = {k: time_mod_fb(m) for k,m in mods.items()}
 
-        print(f"| {dim:4d} | {times_fb['RMSNorm']:17.3f} | {times_fb['RMSNorm_py']:17.3f} | {times_fb['Triton']:17.3f} | {times_fb['LayerNorm']:17.3f} |")
+        print(f"| {dim:4d} | {times_fb['RMSNorm']:17.3f} | {times_fb['RMSNorm_py']:17.3f} | {times_fb['Compiled_RMSNorm_py']:17.3f} | {times_fb['Triton']:17.3f} | {times_fb['LayerNorm']:17.3f} |")
 
 def main():
     args = parse_args()
